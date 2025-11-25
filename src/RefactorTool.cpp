@@ -24,15 +24,12 @@ void RefactorHandler::run(const MatchFinder::MatchResult &Result) {
     auto &SM = *Result.SourceManager;  // Получаем SourceManager для проверки
                                        // isInMainFile
 
-    if (const auto *Dtor =
-            Result.Nodes.getNodeAs<CXXDestructorDecl>("classDecl")) {
+    if (const auto *Dtor = Result.Nodes.getNodeAs<CXXDestructorDecl>("classDecl")) {
         handle_nv_dtor(Dtor, Diag, SM);
     }
 
-    if (const auto *Method =
-            Result.Nodes.getNodeAs<CXXMethodDecl>("methodDecl");
-        Method && Method->size_overridden_methods() > 0 &&
-        !Method->hasAttr<OverrideAttr>()) {
+    if (const auto *Method = Result.Nodes.getNodeAs<CXXMethodDecl>("methodDecl");
+        Method && Method->size_overridden_methods() > 0 && !Method->hasAttr<OverrideAttr>()) {
         handle_miss_override(Method, Diag, SM);
     }
 
@@ -41,16 +38,13 @@ void RefactorHandler::run(const MatchFinder::MatchResult &Result) {
     }
 }
 
-void RefactorHandler::handle_nv_dtor(const CXXDestructorDecl *Dtor,
-                                     DiagnosticsEngine &Diag,
-                                     SourceManager &SM) {
+void RefactorHandler::handle_nv_dtor(const CXXDestructorDecl *Dtor, DiagnosticsEngine &Diag, SourceManager &SM) {
 
     if (!SM.isInMainFile(Dtor->getLocation())) {
         return;
     }
 
-    const unsigned DiagID =
-        Diag.getCustomDiagID(DiagnosticsEngine::Remark, "Объявлен деструктор");
+    const unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Remark, "Destructor declared");
     Diag.Report(Dtor->getLocation(), DiagID);
 
     SourceLocation spellingLoc = SM.getSpellingLoc(Dtor->getLocation());
@@ -62,24 +56,20 @@ void RefactorHandler::handle_nv_dtor(const CXXDestructorDecl *Dtor,
 
     const CXXRecordDecl *record = Dtor->getParent();
 
-    if (Dtor->isVirtual() || !Dtor->isThisDeclarationADefinition() ||
-        record->hasAttr<FinalAttr>()) {
+    if (Dtor->isVirtual() || !Dtor->isThisDeclarationADefinition() || record->hasAttr<FinalAttr>()) {
         return;
     }
 
     bool hasDerived = false;
 
     auto CheckDerived = [&](const CXXRecordDecl *Derived) {
-        if (!Derived || Derived == record ||
-            !Derived->isThisDeclarationADefinition() ||
+        if (!Derived || Derived == record || !Derived->isThisDeclarationADefinition() ||
             Derived->getDescribedClassTemplate())
             return;
 
         for (const auto &BaseSpecifier : Derived->bases()) {
-            const CXXRecordDecl *BaseDecl =
-                BaseSpecifier.getType()->getAsCXXRecordDecl();
-            if (BaseDecl &&
-                BaseDecl->getCanonicalDecl() == record->getCanonicalDecl()) {
+            const CXXRecordDecl *BaseDecl = BaseSpecifier.getType()->getAsCXXRecordDecl();
+            if (BaseDecl && BaseDecl->getCanonicalDecl() == record->getCanonicalDecl()) {
                 hasDerived = true;
                 return;
             }
@@ -117,28 +107,21 @@ void RefactorHandler::handle_nv_dtor(const CXXDestructorDecl *Dtor,
 
         std::string className = record->getNameAsString();
 
-        unsigned ID =
-            Diag.getCustomDiagID(DiagnosticsEngine::Remark,
-                                 "Добавлен 'virtual' к деструктору класса '%0' "
-                                 "(базовый класс с наследниками)");
+        unsigned ID = Diag.getCustomDiagID(DiagnosticsEngine::Remark, "Added 'virtual' to destructor of class '%0' "
+                                                                      "(base class with derived classes)");
         Diag.Report(Dtor->getLocation(), ID) << className;
 
-        llvm::errs() << "Исправлено: деструктор " << className
-                     << " теперь виртуальный\n";
+        llvm::errs() << "Fixed: destructor " << className << " is now virtual\n";
     }
 }
 
-void RefactorHandler::handle_miss_override(const CXXMethodDecl *Method,
-                                           DiagnosticsEngine &Diag,
-                                           SourceManager &SM) {
+void RefactorHandler::handle_miss_override(const CXXMethodDecl *Method, DiagnosticsEngine &Diag, SourceManager &SM) {
 
-    if (SM.isInSystemHeader(Method->getLocation()) ||
-        !SM.isInMainFile(SM.getExpansionLoc(Method->getLocation()))) {
+    if (SM.isInSystemHeader(Method->getLocation()) || !SM.isInMainFile(SM.getExpansionLoc(Method->getLocation()))) {
         return;
     }
 
-    const unsigned DiagID =
-        Diag.getCustomDiagID(DiagnosticsEngine::Remark, "Отсутствует override");
+    const unsigned DiagID = Diag.getCustomDiagID(DiagnosticsEngine::Remark, "Missing override");
     Diag.Report(Method->getLocation(), DiagID);
 
     if (Method->hasAttr<OverrideAttr>()) {
@@ -170,19 +153,14 @@ void RefactorHandler::handle_miss_override(const CXXMethodDecl *Method,
         std::string methodName = Method->getNameAsString();
         std::string className = Method->getParent()->getNameAsString();
 
-        unsigned ID = Diag.getCustomDiagID(
-            DiagnosticsEngine::Remark,
-            "Добавлен 'override' к методу '%0' в классе '%1'");
+        unsigned ID = Diag.getCustomDiagID(DiagnosticsEngine::Remark, "Added 'override' to method '%0' in class '%1'");
         Diag.Report(Method->getLocation(), ID) << methodName << className;
 
-        llvm::errs() << "Исправлено: метод " << className << "::" << methodName
-                     << " теперь помечен override\n";
+        llvm::errs() << "Fixed: method " << className << "::" << methodName << " is now marked override\n";
     }
 }
 
-void RefactorHandler::handle_crange_for(const VarDecl *LoopVar,
-                                        DiagnosticsEngine &Diag,
-                                        SourceManager &SM) {
+void RefactorHandler::handle_crange_for(const VarDecl *LoopVar, DiagnosticsEngine &Diag, SourceManager &SM) {
     SourceLocation Loc = SM.getExpansionLoc(LoopVar->getLocation());
     if (SM.isInSystemHeader(Loc) || !SM.isInMainFile(Loc))
         return;
@@ -196,19 +174,16 @@ void RefactorHandler::handle_crange_for(const VarDecl *LoopVar,
         return;
 
     QualType Base = VarType.getNonReferenceType().getUnqualifiedType();
-    if (Base->isFundamentalType() || Base->isPointerType() ||
-        Base->isEnumeralType())
+    if (Base->isFundamentalType() || Base->isPointerType() || Base->isEnumeralType())
         return;
 
     if (const AutoType *AT = Base->getAs<AutoType>()) {
         QualType Deduced = AT->getDeducedType();
         if (!Deduced.isNull()) {
 
-            QualType DeducedBase =
-                Deduced.getNonReferenceType().getUnqualifiedType();
+            QualType DeducedBase = Deduced.getNonReferenceType().getUnqualifiedType();
 
-            if (DeducedBase->isFundamentalType() ||
-                DeducedBase->isPointerType() || DeducedBase->isEnumeralType() ||
+            if (DeducedBase->isFundamentalType() || DeducedBase->isPointerType() || DeducedBase->isEnumeralType() ||
                 DeducedBase->isReferenceType()) {
                 return;
             }
@@ -230,35 +205,27 @@ void RefactorHandler::handle_crange_for(const VarDecl *LoopVar,
     std::string VarName = LoopVar->getNameAsString();
     std::string TypeName = VarType.getAsString();
 
-    unsigned ID = Diag.getCustomDiagID(DiagnosticsEngine::Remark,
-                                       "добавлена ссылка к переменной '%0' "
-                                       "типа '%1' для избежания копирования");
+    unsigned ID = Diag.getCustomDiagID(DiagnosticsEngine::Remark, "added reference to variable '%0' "
+                                                                  "of type '%1' to avoid copying");
 
     Diag.Report(LoopVar->getLocation(), ID) << VarName << TypeName;
 
-    llvm::errs() << "Исправлено: переменная " << VarName << " теперь имеет тип "
-                 << TypeName << "&\n";
+    llvm::errs() << "Fixed: variable " << VarName << " now has type " << TypeName << "&\n";
 }
 
 auto NvDtorMatcher() {
-    return cxxDestructorDecl(
-               unless(isVirtual()), unless(isImplicit()),
-               hasParent(cxxRecordDecl(unless(isFinal()),
-                                       hasDescendant(cxxRecordDecl()))),
-               unless(hasParent(cxxRecordDecl(isTemplateInstantiation()))))
+    return cxxDestructorDecl(unless(isVirtual()), unless(isImplicit()),
+                             hasParent(cxxRecordDecl(unless(isFinal()), hasDescendant(cxxRecordDecl()))),
+                             unless(hasParent(cxxRecordDecl(isTemplateInstantiation()))))
         .bind("classDecl");
 }
 
 auto NoOverrideMatcher() {
-    return cxxMethodDecl(unless(isImplicit()), unless(cxxDestructorDecl()),
-                         isDefinition())
-        .bind("methodDecl");
+    return cxxMethodDecl(unless(isImplicit()), unless(cxxDestructorDecl()), isDefinition()).bind("methodDecl");
 }
 
 auto NoRefConstVarInRangeLoopMatcher() {
-    return varDecl(
-               hasType(qualType(isConstQualified(), unless(referenceType()))),
-               hasAncestor(cxxForRangeStmt()))
+    return varDecl(hasType(qualType(isConstQualified(), unless(referenceType()))), hasAncestor(cxxForRangeStmt()))
         .bind("VarDecl");
 }
 
@@ -270,21 +237,16 @@ ComplexConsumer::ComplexConsumer(Rewriter &Rewrite) : Handler(Rewrite) {
 }
 
 // Метод HandleTranslationUnit вызывается для каждого файла.
-void ComplexConsumer::HandleTranslationUnit(ASTContext &Context) {
-    Finder.matchAST(Context);
-}
+void ComplexConsumer::HandleTranslationUnit(ASTContext &Context) { Finder.matchAST(Context); }
 
-std::unique_ptr<ASTConsumer>
-CodeRefactorAction::CreateASTConsumer(CompilerInstance &CI, StringRef file) {
-    RewriterForCodeRefactor.setSourceMgr(CI.getSourceManager(),
-                                         CI.getLangOpts());
+std::unique_ptr<ASTConsumer> CodeRefactorAction::CreateASTConsumer(CompilerInstance &CI, StringRef file) {
+    RewriterForCodeRefactor.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
     return std::make_unique<ComplexConsumer>(RewriterForCodeRefactor);
 }
 
 bool CodeRefactorAction::BeginSourceFileAction(CompilerInstance &CI) {
     // Инициализируем Rewriter для рефакторинга.
-    RewriterForCodeRefactor.setSourceMgr(CI.getSourceManager(),
-                                         CI.getLangOpts());
+    RewriterForCodeRefactor.setSourceMgr(CI.getSourceManager(), CI.getLangOpts());
     return true;  // Возвращаем true, чтобы продолжить обработку файла.
 }
 
