@@ -105,7 +105,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 # Doing this at the end so that all definitions and link/include paths are
 # available for the sub-projects.
 #===============================================================================
-add_subdirectory(tests)
 add_subdirectory(src)
+add_subdirectory(tests)
+
 
 
